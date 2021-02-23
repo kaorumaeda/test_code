@@ -4,6 +4,13 @@ Add-Type -AssemblyName System.Drawing
 # フォームに設定するオブジェクトの縦軸座標位置
 $NextLocatePoint = 20
 
+# IFを初期化する関数
+function InitInterface($InterfaceName){
+    Get-NetAdapter -Name $InterfaceName | Remove-NetIPAddress -confirm:$false
+    Get-NetAdapter -Name $InterfaceName | Remove-NetRoute -DestinationPrefix 0.0.0.0/0 -confirm:$false
+    Get-NetAdapter -Name $InterfaceName | Set-NetIPInterface -AddressFamily IPv4 -Dhcp Disabled
+}
+
 # インターフェイス情報一覧を取得
 $InterfaceInfo = @{};
 Get-NetIPAddress -AddressFamily ipv4 | ForEach-Object -process {$InterfaceInfo.add($_.InterfaceAlias,$_.IPAddress)}
@@ -152,22 +159,36 @@ if ($Result -eq [System.Windows.Forms.DialogResult]::OK)
 
             # ラジオボタンが選択されている対象に対して処理を実行
             if($IntRadioButon[$Index].Checked){
-
+                $Prefix = $InputPreBox.Text
+                $Gateway = $InputGateBox.Text
                 # 入力がDHCPの場合、DHCPクライアントを有効化
                 if($IP_Address -eq "DHCP")
                 {
-                    Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Set-NetIPInterface -AddressFamily IPv4 -Dhcp Enabled" -Verb runas
-                    #Start-Sleep -s 20
-                    #Start-Process powershell.exe -ArgumentList "Restart-NetAdapter -Name $Key -Confirm:$False" -Verb runas
-                    # DHCP変換後、なぜか自己割り当てIPアドレスになる。時間を置いた後アダプター再起動により復旧する。なぜだ
+                    #Start-Process powershell.exe -ArgumentList ".\ChangeDHCP.ps1 $Key" -Verb runas
+                    #Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Remove-NetIPAddress -confirm:$false"  -Verb runas
+                    #Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Set-NetIPInterface -AddressFamily IPv4 -Dhcp Enabled" -Verb runas
+                    #Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Remove-NetRoute -DestinationPrefix 0.0.0.0/0 -confirm:$false" -Verb runas
+                    #Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Restart-NetAdapter" -Verb runas
+                    InitInterface($Key)
+                    Get-NetAdapter -Name $Key | Set-NetIPInterface -AddressFamily IPv4 -Dhcp Enabled
+                    Get-NetAdapter -Name $Key | Restart-NetAdapter
+
                 }
                 
                 # それ以外(IPアドレス範囲)の場合、IPアドレスを入力値で変更
                 else
                 {
                     if(($InputPreBox.Text -match "^[12]?[1-9]$") -And ($InputGateBox.Text -match "^(([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
-                    {
-                        Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | New-NetIPAddress -AddressFamily IPv4 -IPAddress $IP_Address -PrefixLength $InputPreBox.Text -DefaultGateway $InputGateBox.Text" -Verb runas
+                    {   
+                        # Write-Output "$Key $IP_Address $Prefix $Gateway"
+                        # Start-Process powershell.exe -ArgumentList ".\ChangeIP.ps1 $Key $IP_Address $Prefix $Gateway" -Verb runas
+                        # Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Set-NetIPInterface -AddressFamily IPv4 -Dhcp Enabled" -Verb runas
+                        # Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | New-NetIPAddress -AddressFamily IPv4 -IPAddress $IP_Address -PrefixLength $Prefix -DefaultGateway $Gateway" -Verb runas
+                        # Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name $Key | Restart-NetAdapter" -Verb runas
+                        # Start-Process powershell.exe -ArgumentList "Get-NetAdapter -Name イーサネット | Restart-NetAdapter" -Verb runas
+                        InitInterface($Key)
+                        Get-NetAdapter -Name $Key | New-NetIPAddress -AddressFamily IPv4 -IPAddress $IP_Address -PrefixLength $Prefix -DefaultGateway $Gateway
+                        Get-NetAdapter -Name $Key | Restart-NetAdapter
                     }
                     else
                     {
